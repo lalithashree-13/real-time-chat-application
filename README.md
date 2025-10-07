@@ -73,14 +73,16 @@ Typing events and user lists are updated dynamically
 
 📦 Technologies Used
 
-Area	Technology
+Area	                     Technology
 
-Frontend	HTML5, CSS3, Vanilla JavaScript
-Backend	Node.js, Express.js
+Frontend	          HTML5, CSS3, Vanilla JavaScript
 
-Real-Time Communication	Socket.IO
+Backend            	  Node.js, Express.js
 
-Styling	Custom CSS with gradients and responsive layout
+Real-Time              socket.IO
+Communication	    
+
+Styling	             Custom CSS with gradients and responsive layout
 
 📸 Screenshots (Optional)
 
