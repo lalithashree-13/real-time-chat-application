@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Real-time Chat</title>
+  <!-- Socket.IO client (CDN) -->
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#7c3aed;--me:#0ea5a4}
+    *{box-sizing:border-box;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071022 0%, #0f1724 100%);color:#e6eef6}
+    .app{max-width:1100px;margin:28px auto;display:grid;grid-template-columns:300px 1fr;gap:20px;padding:20px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03);padding:18px;border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+
+    /* Sidebar */
+    .sidebar{display:flex;flex-direction:column;height:80vh}
+    .room-title{font-weight:700;margin-bottom:12px}
+    .users{flex:1;overflow:auto;padding-right:6px}
+    .user{padding:8px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01);display:flex;align-items:center;gap:10px}
+    .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:700}
+    .user small{display:block;color:var(--muted);font-size:12px}
+
+    /* Chat area */
+    .chat{display:flex;flex-direction:column;height:80vh}
+    .messages{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .message{max-width:70%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.02);box-shadow:inset 0 -1px 0 rgba(255,255,255,0.01)}
+    .message.me{margin-left:auto;background:linear-gradient(180deg, rgba(78,222,210,0.08), rgba(78,222,210,0.03));border:1px solid rgba(78,222,210,0.12)}
+    .meta{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .meta strong{font-size:13px}
+    .time{color:var(--muted);font-size:12px}
+
+    .typing{color:var(--muted);font-size:13px;padding:6px 12px}
+
+    .composer{display:flex;gap:10px;padding-top:12px}
+    .composer input{flex:1;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .composer button{padding:12px 16px;border-radius:10px;border:none;background:var(--accent);color:white;font-weight:600;cursor:pointer}
+    .composer .emoji{background:transparent;border:1px solid rgba(255,255,255,0.03);padding:10px;border-radius:10px;cursor:pointer}
+
+    /* small screens */
+    @media(max-width:900px){.app{grid-template-columns:1fr;}.sidebar{height:200px}.chat{height:60vh}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="card sidebar">
+      <div class="room-title">Room: <span id="roomName">Global</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="usernameInput" placeholder="Your name" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit" />
+        <button id="joinBtn" style="padding:8px 10px;border-radius:8px;border:none;background:var(--me);color:#022;cursor:pointer;font-weight:700">Join</button>
+      </div>
+      <div class="users" id="usersList">
+        <!-- users go here -->
+      </div>
+      <small style="color:var(--muted)">Tips: Enter a name and click Join. Messages will be broadcast to everyone in the room (requires server).</small>
+    </aside>
+
+    <main class="card chat">
+      <div class="messages" id="messages"></div>
+      <div class="typing" id="typingIndicator" style="display:none"></div>
+      <div class="composer">
+        <button class="emoji" id="emojiBtn">😊</button>
+        <input id="messageInput" placeholder="Type a message and press Enter" autocomplete="off" />
+        <button id="sendBtn">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Safety helper: escape HTML
+    function escapeHtml(unsafe){
+      return unsafe.replace(/[&<"'`=\/]/g, function(s) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#47;','`':'&#96;','=':'&#61;'})[s]; });
+    }
+
+    // Connect to Socket.IO server (assumes same origin). If your server runs on another origin, pass the URL: io('http://localhost:3000')
+    const socket = io();
+
+    const messagesEl = document.getElementById('messages');
+    const usersListEl = document.getElementById('usersList');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const usernameInput = document.getElementById('usernameInput');
+    const joinBtn = document.getElementById('joinBtn');
+    const roomNameEl = document.getElementById('roomName');
+
+    let username = null;
+    let typingTimeout = null;
+
+    function addMessage({user, text, time}, isMe=false){
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message' + (isMe ? ' me' : '');
+      const meta = document.createElement('div'); meta.className='meta';
+      const strong = document.createElement('strong'); strong.textContent = user;
+      const t = document.createElement('span'); t.className='time'; t.textContent = new Date(time).toLocaleTimeString();
+      meta.appendChild(strong); meta.appendChild(t);
+      const body = document.createElement('div'); body.innerHTML = escapeHtml(text).replace(/\n/g,'<br>');
+      wrapper.appendChild(meta); wrapper.appendChild(body);
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // Emit join
+    joinBtn.addEventListener('click', ()=>{
+      const name = usernameInput.value && usernameInput.value.trim();
+      if(!name) return alert('Enter a name to join');
+      username = name;
+      socket.emit('join', username);
+      usernameInput.disabled = true; joinBtn.disabled = true; roomNameEl.textContent = 'Global';
+    });
+
+    // Send message
+    function sendMessage(){
+      if(!username) return alert('Please join first');
+      const text = messageInput.value.trim();
+      if(!text) return;
+      const payload = {user:username, text, time: Date.now()};
+      socket.emit('message', payload);
+      addMessage(payload, true);
+      messageInput.value = '';
+      socket.emit('stop-typing', username);
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+      else { // typing
+        if(!username) return;
+        socket.emit('typing', username);
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(()=>{ socket.emit('stop-typing', username); }, 900);
+      }
+    });
+
+    // Emoji quick insert
+    document.getElementById('emojiBtn').addEventListener('click', ()=>{ messageInput.value += '😊'; messageInput.focus(); });
+
+    // Socket listeners
+    socket.on('connect', ()=>{ console.log('connected to server'); });
+
+    socket.on('message', (msg) => { // message from server
+      // If the message is from me and already displayed, skip duplicate
+      if(msg.user === username) return; // we already display our own messages locally
+      addMessage(msg, false);
+    });
+
+    socket.on('user-list', (users) => {
+      usersListEl.innerHTML = '';
+      users.forEach(u => {
+        const div = document.createElement('div'); div.className='user';
+        const av = document.createElement('div'); av.className='avatar'; av.textContent = (u[0]||'U').toUpperCase();
+        const name = document.createElement('div'); name.innerHTML = `<strong>${escapeHtml(u)}</strong><small>online</small>`;
+        div.appendChild(av); div.appendChild(name);
+        usersListEl.appendChild(div);
+      });
+    });
+
+    socket.on('typing', ({user})=>{
+      typingIndicator.style.display = 'block'; typingIndicator.textContent = `${user} is typing...`;
+    });
+    socket.on('stop-typing', ({user})=>{
+      typingIndicator.style.display = 'none'; typingIndicator.textContent = '';
+    });
+
+    // Optional: show system messages
+    socket.on('system', (msg)=>{ addMessage({user:'System', text:msg, time: Date.now()}, false); });
+
+  </script>
+</body>
+</html>
