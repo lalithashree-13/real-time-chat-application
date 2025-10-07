@@ -6,7 +6,9 @@ It allows multiple users to join a global chat room, send messages instantly, an
 🚀 Features
 
 ✅ Real-time messaging with Socket.IO
+
 ✅ User join and leave notifications
+
 ✅ Typing indicator (“User is typing…”)
 ✅ Responsive and modern UI (HTML + CSS)
 ✅ Displays online users dynamically
