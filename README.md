@@ -22,14 +22,21 @@ It allows multiple users to join a global chat room, send messages instantly, an
 
 
 🧱 Project Structure
+
 real-time-chat/
+
 │
+
 ├── client/
+
 │   └── index.html       # Frontend (UI + Socket.IO client)
+
 │
 └── server/
+
     ├── server.js        # Backend (Express + Socket.IO)
     └── package.json     # Node.js dependencies
+
 
 
 ⚙️ Installation & Setup
@@ -75,14 +82,14 @@ Typing events and user lists are updated dynamically
 
 Area	                     Technology
 
-Frontend	          HTML5, CSS3, Vanilla JavaScript
+Frontend	      -    HTML5, CSS3, Vanilla JavaScript
 
-Backend            	  Node.js, Express.js
+Backend           - 	  Node.js, Express.js
 
-Real-Time              socket.IO
+Real-Time          -    socket.IO
 Communication	    
 
-Styling	             Custom CSS with gradients and responsive layout
+Styling	            - Custom CSS with gradients and responsive layout
 
 📸 Screenshots (Optional)
 
@@ -103,4 +110,4 @@ Project created in 2025
 
 
 
-🌐 GitHub Profile
+
